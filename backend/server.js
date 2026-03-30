@@ -8,8 +8,8 @@ app.use(cors());
 app.use(express.json());
 
 app.post("/api/predict", (req, res) => {
-  const { battery_id, voltage, current, temperature} = req.body;
-  const inputData = JSON.stringify({ voltage, current, temperature});
+  const { battery_id, voltage, current, temperature } = req.body;
+  const inputData = JSON.stringify({ voltage, current, temperature });
 
   const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
 
@@ -23,18 +23,17 @@ app.post("/api/predict", (req, res) => {
       const socValue = prediction.predicted_soc;
       const sql =
         "INSERT INTO telemetry (battery_id, voltage, current, predicted_soc) VALUES (?, ?, ?, ?)";
-      db.query(
-        sql,
-        [battery_id, voltage, current, socValue],
-        (err, result) => {
-          if (err) return res.status(500).json({ error: "DB Error" });
-          res.json({
-            message: "Success! Data logged and Math calculated.",
-            database_id: result.insertId,
-            final_prediction: socValue,
-          });
-        },
-      );
+      db.query(sql, [battery_id, voltage, current, socValue], (err, result) => {
+        if (err) {
+          console.error("THE REAL MYSQL ERROR IS: ", err);
+          return res.status(500).json({ error: "DB Error" });
+        }
+        res.json({
+          message: "Success! Data logged and Math calculated.",
+          database_id: result.insertId,
+          final_prediction: socValue,
+        });
+      });
     } catch (error) {
       res.status(500).json({
         error: "Failed to parse Python output",
