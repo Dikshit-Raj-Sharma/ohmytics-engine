@@ -8,8 +8,8 @@ app.use(cors());
 app.use(express.json());
 
 app.post("/api/predict", (req, res) => {
-  const userVoltage = req.body.voltage;
-  const inputData = JSON.stringify({ voltage: userVoltage });
+  const { battery_id, voltage, current, temperature} = req.body;
+  const inputData = JSON.stringify({ voltage, current, temperature});
 
   const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
 
@@ -19,15 +19,27 @@ app.post("/api/predict", (req, res) => {
   });
   pythonProcess.on("close", (code) => {
     try {
-      const result = JSON.parse(pythonOutput);
-      res.json({ message: "Python math complete!", data: result });
+      const prediction = JSON.parse(pythonOutput);
+      const socValue = prediction.predicted_soc;
+      const sql =
+        "INSERT INTO telemetry (battery_id, voltage, current, predicted_soc) VALUES (?, ?, ?, ?)";
+      db.query(
+        sql,
+        [battery_id, voltage, current, socValue],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: "DB Error" });
+          res.json({
+            message: "Success! Data logged and Math calculated.",
+            database_id: result.insertId,
+            final_prediction: socValue,
+          });
+        },
+      );
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          error: "Failed to parse Python output",
-          raw_output: pythonOutput,
-        });
+      res.status(500).json({
+        error: "Failed to parse Python output",
+        raw_output: pythonOutput,
+      });
     }
   });
 });
