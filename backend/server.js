@@ -7,42 +7,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.post("/api/predict", (req, res) => {
-  const { battery_id, voltage, current, temperature } = req.body;
-  const inputData = JSON.stringify({ voltage, current, temperature });
-
-  const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
-
-  let pythonOutput = "";
-  pythonProcess.stdout.on("data", (data) => {
-    pythonOutput += data.toString();
-  });
-  pythonProcess.on("close", (code) => {
-    try {
-      const prediction = JSON.parse(pythonOutput);
-      const socValue = prediction.predicted_soc;
-      const sql =
-        "INSERT INTO telemetry (battery_id, voltage, current, predicted_soc) VALUES (?, ?, ?, ?)";
-      db.query(sql, [battery_id, voltage, current, socValue], (err, result) => {
-        if (err) {
-          console.error("THE REAL MYSQL ERROR IS: ", err);
-          return res.status(500).json({ error: "DB Error" });
-        }
-        res.json({
-          message: "Success! Data logged and Math calculated.",
-          database_id: result.insertId,
-          final_prediction: socValue,
-        });
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: "Failed to parse Python output",
-        raw_output: pythonOutput,
-      });
-    }
-  });
-});
-// Create the connection to MySQL
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
@@ -62,4 +26,54 @@ app.get("/", (req, res) => {
 
 app.listen(5000, () => {
   console.log("Server started on port 5000");
+});
+
+app.get("/api/data", (req, res) => {
+  const sql = "SELECT * FROM telemetry ORDER BY id DESC LIMIT 50";
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("DB Error:", err);
+      return res.status(500).json({ error: "DB Error" });
+    }
+    res.json(results.reverse());
+  });
+});
+app.post("/api/predict", (req, res) => {
+  const { battery_id, voltage, current, temperature, true_soc } = req.body;
+  const inputData = JSON.stringify({ voltage, current, temperature });
+
+  const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
+
+  let pythonOutput = "";
+  pythonProcess.stdout.on("data", (data) => {
+    pythonOutput += data.toString();
+  });
+
+  pythonProcess.on("close", (code) => {
+    try {
+      const prediction = JSON.parse(pythonOutput);
+      const socValue = prediction.predicted_soc;
+      const sql = "INSERT INTO telemetry (battery_id, voltage, current, temperature, predicted_soc, true_soc) VALUES (?, ?, ?, ?, ?, ?)";
+      db.query(
+        sql,
+        [battery_id, voltage, current, temperature, socValue, true_soc],
+        (err, result) => {
+          if (err) {
+            console.error("THE REAL MYSQL ERROR IS: ", err);
+            return res.status(500).json({ error: "DB Error" });
+          }
+          res.json({
+            message: "Success! Data logged and Math calculated.",
+            database_id: result.insertId,
+            final_prediction: socValue,
+          });
+        },
+      );
+    } catch (error) {
+      res.status(500).json({
+        error: "Failed to parse Python output",
+        raw_output: pythonOutput,
+      });
+    }
+  });
 });
