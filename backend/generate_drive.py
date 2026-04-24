@@ -13,7 +13,7 @@ def generate_drive_cycle():
         writer = csv.writer(file)
         writer.writerow(['cycle', 'voltage', 'current', 'temperature', 'true_soc'])
 
-        #Simulating 1000s of driving
+        #Simulating 1000s of drivingx``
         for second in range(1,1001):
             if second % 100 < 10:  # Hard acceleration every 100s
                 current = random.uniform(-40, -50)

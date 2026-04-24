@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// Custom Tooltip (Refactored to Tailwind)
+// Custom Tooltip
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const pred = payload.find(p => p.dataKey === 'predicted_soc');
@@ -24,6 +24,7 @@ function App() {
   const [sampleCount, setSampleCount] = useState(0);
   const [lastTick, setLastTick] = useState('--');
   const [isSimulating, setIsSimulating] = useState(false);
+  const [isDspActive, setIsDspActive] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,7 +42,6 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Bring back our Start Engine function!
   const handleStartSimulation = async () => {
     setIsSimulating(true);
     try {
@@ -51,6 +51,7 @@ function App() {
       setIsSimulating(false);
     }
   };
+
   const handleStopSimulation = async () => {
     try {
       await fetch('http://localhost:5000/api/stop-simulation', { method: 'POST' });
@@ -59,6 +60,23 @@ function App() {
       console.error("Failed to stop", error);
     }
   };
+
+  // NEW: Handler for the DSP Toggle
+  const handleToggleDsp = async () => {
+    const newState = !isDspActive;
+    setIsDspActive(newState);
+    try {
+      await fetch('http://localhost:5000/api/toggle-dsp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ use_dsp: newState })
+      });
+    } catch (error) {
+      console.error("Failed to toggle DSP", error);
+      setIsDspActive(!newState); // Revert if failed
+    }
+  };
+
   const latest = chartData[chartData.length - 1];
   const predSoc = latest?.predicted_soc ?? null;
   const trueSoc = latest?.true_soc ?? null;
@@ -99,8 +117,28 @@ function App() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            {/* The Start Button */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            
+            {/* NEW: DSP Filter Toggle UI */}
+            <div 
+              onClick={handleToggleDsp}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
+                isDspActive 
+                  ? 'bg-purple-500/10 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]' 
+                  : 'bg-[#111d30] border-white/5 hover:border-white/20'
+              }`}
+            >
+              <div className="font-['Space_Mono'] text-[10px] md:text-[11px] uppercase tracking-widest text-[#6b7fa8]">
+                DSP IIR Filter
+              </div>
+              <div className={`w-8 h-4 rounded-full relative transition-colors ${isDspActive ? 'bg-purple-500/50' : 'bg-[#1a2942]'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-transform duration-300 ${
+                  isDspActive ? 'translate-x-4 bg-purple-400' : 'translate-x-0.5 bg-[#4a5c7a]'
+                }`} />
+              </div>
+            </div>
+
+            {/* The Start/Stop Button */}
             {isSimulating ? (
               <button 
                 onClick={handleStopSimulation}
@@ -125,7 +163,7 @@ function App() {
           </div>
         </div>
 
-        {/* Metric Cards - Tailwind Grid makes this mobile responsive! */}
+        {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'RLS Predicted SoC', value: predSoc?.toFixed(2) ?? '--', unit: '%', sub: 'recursive estimate', tag: { label: '+RLS', text: 'text-green-400', bg: 'bg-green-400/10' }, accent: 'border-t-amber-400/40' },

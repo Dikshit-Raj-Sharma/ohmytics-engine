@@ -7,10 +7,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+
 let simulationRunning = false;
 let activeSimProcess = null;
 let globalW = [[50.0], [0.0], [0.0], [0.0]]; // Initial bad guess (50%)
 let globalP = [[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]]; // High uncertainty
+let globalUseDsp = false;
+let lastFilteredV = null;
+let lastFilteredI = null;
 
 const db = mysql.createConnection({
   host: "localhost",
@@ -53,6 +57,8 @@ app.post("/api/start-simulation", (req, res) => {
   // 1. Wipe the Memory so a restart actually "learns" again
   globalW = [[50.0], [0.0], [0.0], [0.0]];
   globalP = [[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]];
+  lastFilteredV = null;
+  lastFilteredI = null;
 
   db.query("TRUNCATE TABLE telemetry", () => {
     console.log("⚡ UI Triggered: Starting Engine...");
@@ -91,9 +97,12 @@ app.post("/api/predict", (req, res) => {
       current, 
       temperature, 
       true_soc,
-      W: globalW,  // Send current memory
-      P: globalP   // Send current uncertainty
-  });
+      W: globalW,  
+      P: globalP,
+      use_dsp_filter: globalUseDsp, 
+      last_v: lastFilteredV,     
+      last_i: lastFilteredI      
+});
   const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
 
   let pythonOutput = "";
@@ -109,6 +118,8 @@ app.post("/api/predict", (req, res) => {
       if (prediction.new_W && prediction.new_P) {
           globalW = prediction.new_W;
           globalP = prediction.new_P;
+          lastFilteredV = prediction.filtered_v;
+          lastFilteredI = prediction.filtered_i;
       }
       const sql =
         "INSERT INTO telemetry (battery_id, voltage, current, temperature, predicted_soc, true_soc) VALUES (?, ?, ?, ?, ?, ?)";
@@ -135,3 +146,9 @@ app.post("/api/predict", (req, res) => {
     }
   });
 });
+app.post("/api/toggle-dsp", (req, res) => {
+  globalUseDsp = req.body.use_dsp;
+  console.log(`🎛️ DSP Filter is now: ${globalUseDsp ? "ON" : "OFF"}`);
+  res.json({ success: true });
+});
+
