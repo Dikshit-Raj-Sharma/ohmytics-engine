@@ -1,25 +1,32 @@
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
+require("dotenv").config();
 const { spawn } = require("child_process");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
+
 app.use(cors());
 app.use(express.json());
-
 
 let simulationRunning = false;
 let activeSimProcess = null;
 let globalW = [[50.0], [0.0], [0.0], [0.0]]; // Initial bad guess (50%)
-let globalP = [[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]]; // High uncertainty
-let globalUseDsp = false;
-let lastFilteredV = null;
-let lastFilteredI = null;
+let globalP = [
+  [1000, 0, 0, 0],
+  [0, 1000, 0, 0],
+  [0, 0, 1000, 0],
+  [0, 0, 0, 1000],
+]; // High uncertainty
 
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
-  password: "tearsofjoy",
+  password: process.env.DB_PASS,
   database: "bms_db",
 });
 
@@ -33,19 +40,16 @@ app.get("/", (req, res) => {
   res.send("BMS Backend is Running");
 });
 
-app.listen(5000, () => {
-  console.log("Server started on port 5000");
-});
+console.log("Server started on port 5000");
 
 app.get("/api/data", (req, res) => {
-  const sql = "SELECT * FROM telemetry ORDER BY id DESC LIMIT 50";
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error("DB Error:", err);
-      return res.status(500).json({ error: "DB Error" });
-    }
-    res.json(results.reverse());
-  });
+  db.query(
+    "SELECT * FROM telemetry ORDER BY id DESC LIMIT 50",
+    (err, results) => {
+      if (err) return res.status(500).json({ error: "DB Error" });
+      res.json(results.reverse());
+    },
+  );
 });
 
 app.post("/api/start-simulation", (req, res) => {
@@ -54,15 +58,17 @@ app.post("/api/start-simulation", (req, res) => {
   }
 
   simulationRunning = true;
-  // 1. Wipe the Memory so a restart actually "learns" again
   globalW = [[50.0], [0.0], [0.0], [0.0]];
-  globalP = [[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]];
-  lastFilteredV = null;
-  lastFilteredI = null;
+  globalP = [
+    [1000, 0, 0, 0],
+    [0, 1000, 0, 0],
+    [0, 0, 1000, 0],
+    [0, 0, 0, 1000],
+  ];
 
   db.query("TRUNCATE TABLE telemetry", () => {
     console.log("⚡ UI Triggered: Starting Engine...");
-    
+
     // 3. Spawn the worker and save it to the global variable
     activeSimProcess = spawn("node", ["ev_streamer.js"]);
 
@@ -79,30 +85,26 @@ app.post("/api/start-simulation", (req, res) => {
     res.json({ message: "Engine started successfully" });
   });
 });
+
 app.post("/api/stop-simulation", (req, res) => {
   if (activeSimProcess) {
     activeSimProcess.kill();
     activeSimProcess = null;
   }
   simulationRunning = false;
-  res.json({ message: "Simulation forcibly stopped." });
-  // db.query("TRUNCATE TABLE telemetry", () => {
-  //   res.json({ message: "Simulation stopped and chart cleared." });
-  // });
+  res.json({ message: "Simulation stopped." });
 });
+
 app.post("/api/predict", (req, res) => {
   const { battery_id, voltage, current, temperature, true_soc } = req.body;
-  const inputData = JSON.stringify({ 
-      voltage, 
-      current, 
-      temperature, 
-      true_soc,
-      W: globalW,  
-      P: globalP,
-      use_dsp_filter: globalUseDsp, 
-      last_v: lastFilteredV,     
-      last_i: lastFilteredI      
-});
+  const inputData = JSON.stringify({
+    voltage,
+    current,
+    temperature,
+    true_soc,
+    W: globalW,
+    P: globalP,
+  });
   const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
 
   let pythonOutput = "";
@@ -116,10 +118,8 @@ app.post("/api/predict", (req, res) => {
       const socValue = prediction.predicted_soc;
       // 3. UPDATE THE MEMORY! Catch the new, smarter matrices from Python
       if (prediction.new_W && prediction.new_P) {
-          globalW = prediction.new_W;
-          globalP = prediction.new_P;
-          lastFilteredV = prediction.filtered_v;
-          lastFilteredI = prediction.filtered_i;
+        globalW = prediction.new_W;
+        globalP = prediction.new_P;
       }
       const sql =
         "INSERT INTO telemetry (battery_id, voltage, current, temperature, predicted_soc, true_soc) VALUES (?, ?, ?, ?, ?, ?)";
@@ -131,6 +131,14 @@ app.post("/api/predict", (req, res) => {
             console.error("THE REAL MYSQL ERROR IS: ", err);
             return res.status(500).json({ error: "DB Error" });
           }
+          io.emit("telemetry", {
+            id: result.insertId,
+            voltage,
+            current,
+            temperature,
+            predicted_soc: prediction.predicted_soc,
+            true_soc,
+          });
           res.json({
             message: "Success! Data logged and Math calculated.",
             database_id: result.insertId,
@@ -146,9 +154,4 @@ app.post("/api/predict", (req, res) => {
     }
   });
 });
-app.post("/api/toggle-dsp", (req, res) => {
-  globalUseDsp = req.body.use_dsp;
-  console.log(`🎛️ DSP Filter is now: ${globalUseDsp ? "ON" : "OFF"}`);
-  res.json({ success: true });
-});
-
+server.listen(5000, () => console.log("Server on port 5000"));

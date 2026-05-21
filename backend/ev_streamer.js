@@ -22,41 +22,38 @@ async function streamData() {
         // 1. Extract the perfect, clean physics data
         const cleanVoltage = parseFloat(row.voltage);
         const cleanCurrent = parseFloat(row.current);
-        
+
         // 2. Inject Gaussian EMI Noise (Simulating a bad inverter sensor)
         // Adding +/- 1.5V noise to voltage and +/- 2.0A noise to current
         // Simulating motor inverter throwing 30-Amp spikes and 2.5V swings
-        const noiseV = getGaussianNoise(0, 2.5); 
-        const noiseI = getGaussianNoise(0, 30.0);
-        
-        // Simulating a loose ground wire that randomly drops voltage
-        const looseWireDrop = Math.random() > 0.85 ? -3.0 : 0; 
+        const noiseI = getGaussianNoise(0, 0.5); // Realistic ADC noise
+        const noiseV = getGaussianNoise(0, 0.03);
+        const looseWireDrop = Math.random() > 0.95 ? -0.1 : 0;
 
         const noisyVoltage = cleanVoltage + noiseV + looseWireDrop;
         const noisyCurrent = cleanCurrent + noiseI;
-        
+
         const payload = {
           battery_id: 1,
-          voltage: parseFloat(row.voltage),
-          current: parseFloat(row.current),
+          voltage: noisyVoltage,
+          current: noisyCurrent,
           temperature: parseFloat(row.temperature),
           true_soc: parseFloat(row.true_soc),
         };
 
-        try{
-            const response= await fetch(URL,{
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload) 
-            });
-            const resData = await response.json();
+        try {
+          const response = await fetch(URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const resData = await response.json();
+        } catch (error) {
+          console.error("Server Error", error.message);
+          break;
         }
-        catch(error){
-            console.error('Server Error',error.message);
-            break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     });
 }
 streamData();

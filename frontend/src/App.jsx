@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-
+import { io } from "socket.io-client";
 // Custom Tooltip
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -24,23 +24,22 @@ function App() {
   const [sampleCount, setSampleCount] = useState(0);
   const [lastTick, setLastTick] = useState('--');
   const [isSimulating, setIsSimulating] = useState(false);
-  const [isDspActive, setIsDspActive] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/data');
-        const data = await response.json();
-        setChartData(data);
-        setSampleCount(data.length);
-        setLastTick(new Date().toISOString().slice(11, 19));
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-    const interval = setInterval(fetchData, 500);
-    return () => clearInterval(interval);
-  }, []);
+  const socket = io("http://localhost:5000");
+
+  socket.on("telemetry", (row) => {
+    setChartData(prev => {
+      const updated = [...prev, row].slice(-50); // keep last 50
+      setSampleCount(updated.length);
+      setLastTick(new Date().toISOString().slice(11, 19));
+      return updated;
+    });
+  });
+
+  return () => socket.disconnect();
+}, []);
+
 
   const handleStartSimulation = async () => {
     setIsSimulating(true);
@@ -61,21 +60,6 @@ function App() {
     }
   };
 
-  // NEW: Handler for the DSP Toggle
-  const handleToggleDsp = async () => {
-    const newState = !isDspActive;
-    setIsDspActive(newState);
-    try {
-      await fetch('http://localhost:5000/api/toggle-dsp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ use_dsp: newState })
-      });
-    } catch (error) {
-      console.error("Failed to toggle DSP", error);
-      setIsDspActive(!newState); // Revert if failed
-    }
-  };
 
   const latest = chartData[chartData.length - 1];
   const predSoc = latest?.predicted_soc ?? null;
@@ -118,26 +102,6 @@ function App() {
           </div>
           
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            
-            {/* NEW: DSP Filter Toggle UI */}
-            <div 
-              onClick={handleToggleDsp}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
-                isDspActive 
-                  ? 'bg-purple-500/10 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]' 
-                  : 'bg-[#111d30] border-white/5 hover:border-white/20'
-              }`}
-            >
-              <div className="font-['Space_Mono'] text-[10px] md:text-[11px] uppercase tracking-widest text-[#6b7fa8]">
-                DSP IIR Filter
-              </div>
-              <div className={`w-8 h-4 rounded-full relative transition-colors ${isDspActive ? 'bg-purple-500/50' : 'bg-[#1a2942]'}`}>
-                <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-transform duration-300 ${
-                  isDspActive ? 'translate-x-4 bg-purple-400' : 'translate-x-0.5 bg-[#4a5c7a]'
-                }`} />
-              </div>
-            </div>
-
             {/* The Start/Stop Button */}
             {isSimulating ? (
               <button 
