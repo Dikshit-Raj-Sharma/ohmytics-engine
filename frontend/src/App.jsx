@@ -58,15 +58,13 @@ function App() {
         return updated;
       });
     });
-    socket.on("simulation_reset", () => {
-      setChartData([]);
-      setSampleCount(0);
-    });
 
     return () => socket.disconnect();
   }, []);
 
   const handleStartSimulation = async () => {
+    setChartData([]);
+    setSampleCount(0);
     setIsSimulating(true);
     try {
       await fetch("http://localhost:5000/api/start-simulation", {
@@ -118,7 +116,8 @@ function App() {
         @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
       `}</style>
 
-      <div className="min-h-screen bg-[#080e1a] text-[#f0f4ff] font-['DM_Sans'] p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+      <div className="min-h-screen bg-[#080e1a] text-[#f0f4ff] font-['DM_Sans'] p-4 sm:p-6 lg:p-8">
+        {" "}
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-4">
@@ -162,7 +161,6 @@ function App() {
             </div>
           </div>
         </div>
-
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[
@@ -240,7 +238,6 @@ function App() {
             </div>
           ))}
         </div>
-
         {/* Chart Panel */}
         <div className="bg-[#0d1526] border border-white/5 rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
@@ -274,7 +271,7 @@ function App() {
             </div>
           </div>
 
-          <div className="h-[250px] md:h-[320px] w-full">
+          <div style={{ width: "100%", height: "320px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <CartesianGrid
@@ -282,7 +279,7 @@ function App() {
                   stroke="rgba(255,255,255,0.04)"
                   vertical={false}
                 />
-                <XAxis dataKey="timestamp" stroke="transparent" tick={false} />
+                <XAxis dataKey="id" stroke="transparent" tick={false} />
                 <YAxis
                   domain={[yMin, yMax]}
                   stroke="transparent"
@@ -332,7 +329,6 @@ function App() {
             </div>
           </div>
         </div>
-
         {/* Footer */}
         <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-3 text-center sm:text-left">
           <div className="font-['Space_Mono'] text-[9px] md:text-[10px] text-[#3d4f6e] tracking-wider">

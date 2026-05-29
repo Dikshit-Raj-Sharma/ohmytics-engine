@@ -72,7 +72,7 @@ app.post("/api/start-simulation", (req, res) => {
 
   db.query("TRUNCATE TABLE telemetry", () => {
     console.log("⚡ UI Triggered: Starting Engine...");
-    io.emit("simulation_reset");
+    // io.emit("simulation_reset");
     // 3. Spawn the worker and save it to the global variable
     activeSimProcess = spawn("node", ["ev_streamer.js"]);
 
