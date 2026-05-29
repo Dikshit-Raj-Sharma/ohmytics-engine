@@ -40,10 +40,23 @@ def main():
         P_sub       = matrix_sub(P, mat_mult(K, mat_mult(betaT, P)))
         new_P       = scalar_multiply_matrix(1.0 / lam, P_sub)
 
+        prev_voltage = data.get("prev_voltage", None)
+        prev_current = data.get("prev_current", None)
+
+        r_internal = None
+        if prev_voltage is not None and prev_current is not None:
+            delta_i = current - prev_current
+            delta_v = voltage - prev_voltage
+            if abs(delta_i) > 1.0:
+                r_calc = -delta_v / delta_i
+                if 0.001 < r_calc < 0.5: 
+                    r_internal = round(r_calc, 4)
+
         print(json.dumps({
             "predicted_soc": round(predicted_soc, 2),
-            "new_W": new_W,
-            "new_P": new_P,
+            "new_W":         new_W,
+            "new_P":         new_P,
+            "r_internal":    r_internal,
         }))
 
     except Exception as e:

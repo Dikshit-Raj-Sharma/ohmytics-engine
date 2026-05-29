@@ -22,6 +22,8 @@ let globalP = [
   [0, 0, 1000, 0],
   [0, 0, 0, 1000],
 ]; // High uncertainty
+let globalPrevVoltage = null;
+let globalPrevCurrent = null;
 
 const db = mysql.createConnection({
   host: "localhost",
@@ -65,10 +67,12 @@ app.post("/api/start-simulation", (req, res) => {
     [0, 0, 1000, 0],
     [0, 0, 0, 1000],
   ];
+  globalPrevVoltage = null;
+  globalPrevCurrent = null;
 
   db.query("TRUNCATE TABLE telemetry", () => {
     console.log("⚡ UI Triggered: Starting Engine...");
-
+    io.emit("simulation_reset");
     // 3. Spawn the worker and save it to the global variable
     activeSimProcess = spawn("node", ["ev_streamer.js"]);
 
@@ -104,6 +108,8 @@ app.post("/api/predict", (req, res) => {
     true_soc,
     W: globalW,
     P: globalP,
+    prev_voltage: globalPrevVoltage,
+    prev_current: globalPrevCurrent,
   });
   const pythonProcess = spawn("python3", ["rls_engine.py", inputData]);
 
@@ -120,12 +126,13 @@ app.post("/api/predict", (req, res) => {
       if (prediction.new_W && prediction.new_P) {
         globalW = prediction.new_W;
         globalP = prediction.new_P;
+        globalPrevVoltage = voltage;
+        globalPrevCurrent = current;
       }
-      const sql =
-        "INSERT INTO telemetry (battery_id, voltage, current, temperature, predicted_soc, true_soc) VALUES (?, ?, ?, ?, ?, ?)";
+      const sql = "INSERT INTO telemetry (battery_id, voltage, current, temperature, predicted_soc, true_soc, r_internal) VALUES (?, ?, ?, ?, ?, ?, ?)";
       db.query(
         sql,
-        [battery_id, voltage, current, temperature, socValue, true_soc],
+        [battery_id, voltage, current, temperature, socValue, true_soc,prediction.r_internal ?? null],
         (err, result) => {
           if (err) {
             console.error("THE REAL MYSQL ERROR IS: ", err);
@@ -138,6 +145,7 @@ app.post("/api/predict", (req, res) => {
             temperature,
             predicted_soc: prediction.predicted_soc,
             true_soc,
+            r_internal: prediction.r_internal,
           });
           res.json({
             message: "Success! Data logged and Math calculated.",
