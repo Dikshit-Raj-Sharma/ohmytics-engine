@@ -48,11 +48,22 @@ function App() {
   const [lastTick, setLastTick] = useState("--");
   const [isSimulating, setIsSimulating] = useState(false);
 
-  useEffect(() => {
-  // Check server status on mount
+useEffect(() => {
   fetch(`${BACKEND}/api/status`)
     .then(r => r.json())
-    .then(data => setIsSimulating(data.running))
+    .then(data => {
+      setIsSimulating(data.running);
+      // If already running, load existing data
+      if (data.running) {
+        fetch(`${BACKEND}/api/data`)
+          .then(r => r.json())
+          .then(rows => {
+            setChartData(rows);
+            setSampleCount(rows.length);
+          })
+          .catch(() => {});
+      }
+    })
     .catch(() => {});
 
   const socket = io(BACKEND);
