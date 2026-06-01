@@ -8,9 +8,12 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-app.use(cors());
+const io = new Server(server, {
+  cors: { origin: process.env.FRONTEND_URL || "*" }
+});
+app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
+
 app.use(express.json());
 
 let simulationRunning = false;
@@ -26,10 +29,11 @@ let globalPrevVoltage = null;
 let globalPrevCurrent = null;
 
 const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
   password: process.env.DB_PASS,
-  database: "bms_db",
+  database: process.env.DB_NAME,
+  port:     process.env.DB_PORT || 3306,
 });
 
 db.connect((err) => {
@@ -37,12 +41,12 @@ db.connect((err) => {
   else console.log("MySQL Connected!");
 });
 
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`Server on port ${PORT}`));
 // A simple test route
 app.get("/", (req, res) => {
   res.send("BMS Backend is Running");
 });
-
-console.log("Server started on port 5000");
 
 app.get("/api/data", (req, res) => {
   db.query(
@@ -162,4 +166,4 @@ app.post("/api/predict", (req, res) => {
     }
   });
 });
-server.listen(5000, () => console.log("Server on port 5000"));
+

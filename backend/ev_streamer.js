@@ -1,7 +1,7 @@
 const fs = require("fs");
 const csv = require("csv-parser");
 
-const URL = "http://localhost:5000/api/predict";
+const URL = process.env.BACKEND_URL || "http://localhost:5000";
 
 // DSP Feature: Box-Muller transform for true Gaussian White Noise
 function getGaussianNoise(mean = 0, standardDeviation = 0.5) {
@@ -42,7 +42,7 @@ async function streamData() {
         };
 
         try {
-          const response = await fetch(URL, {
+          const response = await fetch(`${URL}/api/predict`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
