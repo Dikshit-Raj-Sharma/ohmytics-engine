@@ -46,9 +46,10 @@ function App() {
   const [sampleCount, setSampleCount] = useState(0);
   const [lastTick, setLastTick] = useState("--");
   const [isSimulating, setIsSimulating] = useState(false);
+  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
   useEffect(() => {
-    const socket = io("http://localhost:5000");
+    const socket = io("BACKEND");
 
     socket.on("telemetry", (row) => {
       setChartData((prev) => {
@@ -67,9 +68,7 @@ function App() {
     setSampleCount(0);
     setIsSimulating(true);
     try {
-      await fetch("http://localhost:5000/api/start-simulation", {
-        method: "POST",
-      });
+      await fetch(`${BACKEND}/api/start-simulation`, { method: "POST" });
     } catch (error) {
       console.error("Failed to start simulation", error);
       setIsSimulating(false);
@@ -78,9 +77,7 @@ function App() {
 
   const handleStopSimulation = async () => {
     try {
-      await fetch("http://localhost:5000/api/stop-simulation", {
-        method: "POST",
-      });
+      await fetch(`${BACKEND}/api/stop-simulation`, { method: "POST" });
       setIsSimulating(false);
     } catch (error) {
       console.error("Failed to stop", error);
