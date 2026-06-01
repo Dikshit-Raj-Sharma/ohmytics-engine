@@ -168,3 +168,6 @@ app.post("/api/predict", (req, res) => {
   });
 });
 
+app.get("/api/status", (req, res) => {
+  res.json({ running: simulationRunning });
+});

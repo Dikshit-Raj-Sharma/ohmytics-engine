@@ -49,20 +49,24 @@ function App() {
   const [isSimulating, setIsSimulating] = useState(false);
 
   useEffect(() => {
-    const socket = io(BACKEND);
+  // Check server status on mount
+  fetch(`${BACKEND}/api/status`)
+    .then(r => r.json())
+    .then(data => setIsSimulating(data.running))
+    .catch(() => {});
 
-    socket.on("telemetry", (row) => {
-      setChartData((prev) => {
-        const updated = [...prev, row].slice(-50); // keep last 50
-        setSampleCount(updated.length);
-        setLastTick(new Date().toISOString().slice(11, 19));
-        return updated;
-      });
+  const socket = io(BACKEND);
+  socket.on("telemetry", (row) => {
+    setChartData((prev) => {
+      const updated = [...prev, row].slice(-50);
+      setSampleCount(updated.length);
+      setLastTick(new Date().toISOString().slice(11, 19));
+      return updated;
     });
+  });
 
-    return () => socket.disconnect();
-  }, []);
-
+  return () => socket.disconnect();
+}, []);
   const handleStartSimulation = async () => {
     setChartData([]);
     setSampleCount(0);
@@ -78,9 +82,10 @@ function App() {
   const handleStopSimulation = async () => {
     try {
       await fetch(`${BACKEND}/api/stop-simulation`, { method: "POST" });
-      setIsSimulating(false);
     } catch (error) {
       console.error("Failed to stop", error);
+    }finally{
+      setIsSimulating(false);
     }
   };
 
