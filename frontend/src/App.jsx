@@ -42,14 +42,14 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 function App() {
+  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   const [chartData, setChartData] = useState([]);
   const [sampleCount, setSampleCount] = useState(0);
   const [lastTick, setLastTick] = useState("--");
   const [isSimulating, setIsSimulating] = useState(false);
-  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
   useEffect(() => {
-    const socket = io("BACKEND");
+    const socket = io(BACKEND);
 
     socket.on("telemetry", (row) => {
       setChartData((prev) => {
